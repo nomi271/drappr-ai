@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drappr AI — Freight Dispatch & Navigation</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={theme:{extend:{colors:{ink:'#13222C',road:'#1E3441',fog:'#EEF1F2',amber:'#F5A524',teal:'#12A594'},fontFamily:{head:['Barlow Condensed','sans-serif'],body:['Barlow','sans-serif']}}}}</script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style type="text/tailwindcss">
+  body{font-family:'Barlow',sans-serif;background:#13222C}
+  .in{@apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-ink focus:outline-none focus:ring-2 focus:ring-amber}
+  .lbl{@apply block text-sm font-semibold text-road mb-1}
+  .btn{@apply rounded-md bg-amber px-4 py-2.5 font-head text-xl font-bold text-ink transition hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed}
+  .btn2{@apply rounded-md border border-road px-3 py-2 font-semibold text-road hover:bg-fog}
+</style>
+<style>
+  h1,h2,h3,.head{font-family:'Barlow Condensed',sans-serif}
+  #drive{perspective:600px;overflow:hidden}
+  .road{position:absolute;left:25%;right:25%;top:38%;bottom:-20%;transform:rotateX(62deg);transform-origin:top;background:#26404f;
+    border-left:6px solid #F5A524;border-right:6px solid #F5A524}
+  .road::before{content:"";position:absolute;left:calc(50% - 4px);width:8px;top:0;bottom:0;
+    background:repeating-linear-gradient(#fff 0 40px,transparent 40px 90px);animation:dash .5s linear infinite}
+  @keyframes dash{to{background-position-y:90px}}
+  .rig{position:absolute;left:50%;top:40%;font-size:90px;transform:translateX(-50%) scale(.15);animation:approach 2.6s cubic-bezier(.5,0,.9,.6) forwards;filter:drop-shadow(0 20px 12px #0008)}
+  @keyframes approach{to{top:92%;transform:translateX(-50%) scale(3.2);opacity:.1}}
+  .pulse{position:absolute;inset:0;border-radius:50%;border:2px solid #12A594;animation:ping 2.4s ease-out infinite}
+  @keyframes ping{from{transform:scale(.2);opacity:1}to{transform:scale(1);opacity:0}}
+  .truck-pin{width:44px;height:44px;border-radius:50%;background:#F5A524;border:3px solid #13222C;display:grid;place-items:center;font-size:22px;box-shadow:0 4px 12px #0006}
+  .pin{width:16px;height:16px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px #13222C}
+  #sheet{max-height:100%;overflow:auto}
+  @media (prefers-reduced-motion:reduce){.rig,.road::before,.pulse{animation:none}}
+</style>
+</head>
+<body class="min-h-screen text-ink">
+
+<!-- PHASE 1 -->
+<section id="p1" class="min-h-screen grid lg:grid-cols-[5fr_7fr]">
+  <div class="hidden lg:flex flex-col justify-between p-12 text-fog bg-ink relative overflow-hidden">
+    <div class="absolute inset-y-0 right-0 w-3" style="background:repeating-linear-gradient(#F5A524 0 36px,transparent 36px 72px)"></div>
+    <h1 class="text-7xl font-bold leading-none">Drappr<span class="text-amber"> AI</span></h1>
+    <div>
+      <p class="head text-5xl font-bold leading-tight" data-i="h1">Verify once. Dispatch anywhere.</p>
+      <p class="mt-4 max-w-md text-slate-300">Route-true mileage, weight-based rates and live bidding for freight in 190+ countries.</p>
+    </div>
+  </div>
+  <div class="bg-fog p-5 sm:p-10 flex items-center">
+    <form id="f1" class="mx-auto w-full max-w-xl space-y-4" autocomplete="off" onsubmit="return false">
+      <h2 class="text-4xl font-bold lg:hidden">Drappr <span class="text-amber">AI</span></h2>
+      <div class="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Role">
+        <button type="button" data-role="shipper" class="role rounded-lg border-2 p-4 text-left"><b class="head text-2xl block">Shipper / Passenger</b><span class="text-sm text-slate-600">I need a load moved</span></button>
+        <button type="button" data-role="driver" class="role rounded-lg border-2 p-4 text-left"><b class="head text-2xl block">Carrier / Driver</b><span class="text-sm text-slate-600">I have a vehicle</span></button>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div><label class="lbl" for="name">Full name</label><input id="name" class="in"></div>
+        <div><label class="lbl" for="idn">CNIC / National ID / License no.</label><input id="idn" class="in"></div>
+      </div>
+      <div>
+        <label class="lbl" for="phone">Mobile number</label>
+        <div class="flex gap-2"><input id="phone" type="tel" placeholder="+92 300 1234567" class="in"><button type="button" id="sendOtp" class="btn2 whitespace-nowrap">Send code</button></div>
+        <div id="otpRow" class="mt-2 hidden flex gap-2"><input id="otp" maxlength="4" inputmode="numeric" placeholder="4-digit code" class="in"><button type="button" id="verOtp" class="btn2">Verify</button></div>
+        <p id="otpOk" class="mt-1 hidden text-sm font-semibold text-teal">Phone verified</p>
+      </div>
+      <div id="drv" class="hidden space-y-3 rounded-lg border border-slate-300 bg-white p-4">
+        <div><label class="lbl" for="reg">Vehicle registration number</label><input id="reg" class="in"></div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div><label class="lbl" for="vtype">Vehicle type</label><select id="vtype" class="in"><option value="heavy">Heavy Trailer 40ft</option><option value="medium">Medium Freight Truck</option><option value="van">Light Express Van</option></select></div>
+          <div><label class="lbl" for="vcap">Capacity</label><div class="flex gap-2"><input id="vcap" type="number" min="1" class="in"><select id="vunit" class="in !w-24"><option>KG</option><option>Tons</option></select></div></div>
+        </div>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div><label class="lbl" for="country">Country</label><select id="country" class="in"></select></div>
+        <div><label class="lbl" for="lang">Preferred language</label><select id="lang" class="in"><option value="en">English</option><option value="ur">اردو (Urdu)</option><option value="it">Italiano</option><option value="ar">العربية</option><option value="tr">Türkçe</option><option value="de">Deutsch</option></select></div>
+      </div>
+      <button id="go1" class="btn w-full"><span data-i="next">Verify and continue</span></button>
+    </form>
+  </div>
+</section>
+
+<!-- TRANSITION -->
+<div id="drive" class="fixed inset-0 z-50 hidden bg-ink">
+  <div class="absolute inset-x-0 top-0 h-[40%]" style="background:linear-gradient(#0c1820,#3C5566)"></div>
+  <div class="road"></div><div class="rig">🚛</div>
+  <p class="absolute bottom-8 inset-x-0 text-center head text-3xl text-fog">Loading your region…</p>
+</div>
+
+<!-- PHASE 2-4 -->
+<section id="app" class="fixed inset-0 hidden">
+  <div id="map" class="absolute inset-0"></div>
+  <div id="mapErr" class="absolute inset-0 hidden place-items-center bg-ink p-8 text-center text-fog"></div>
+  <aside id="sheet" class="absolute z-10 bg-fog shadow-2xl bottom-0 inset-x-0 max-h-[66vh] rounded-t-2xl lg:top-4 lg:left-4 lg:bottom-4 lg:inset-x-auto lg:w-[410px] lg:max-h-none lg:rounded-xl">
+    <header class="sticky top-0 z-10 flex items-center justify-between bg-ink px-4 py-3 text-fog lg:rounded-t-xl">
+      <b class="head text-2xl">Drappr <span class="text-amber">AI</span></b><span id="ctry" class="text-sm"></span>
+    </header>
+
+    <div id="pn1" class="space-y-3 p-4">
+      <h2 class="text-3xl font-bold" data-i="route">Plan your route</h2>
+      <div><label class="lbl">Pickup</label><div id="gA"></div></div>
+      <div><label class="lbl">Destination</label><div id="gB"></div></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="lbl" for="wt">Payload (KG)</label><input id="wt" type="number" min="1" value="1000" class="in"></div>
+        <div><label class="lbl" for="veh">Vehicle class</label><select id="veh" class="in"><option value="heavy">Heavy Trailer 40ft</option><option value="medium">Medium Truck</option><option value="van">Light Van</option></select></div>
+      </div>
+      <p id="capWarn" class="hidden text-sm font-semibold text-red-600"></p>
+      <div id="quote" class="rounded-lg bg-white p-4 border border-slate-200">
+        <p class="text-sm text-slate-500" id="qEmpty">Choose pickup and destination to see distance and rate.</p>
+        <div id="qBody" class="hidden">
+          <div class="flex items-end justify-between"><span id="qKm" class="head text-4xl font-bold"></span><span id="qEta" class="text-sm text-slate-500"></span></div>
+          <dl id="qRows" class="my-2 space-y-1 text-sm"></dl>
+          <div class="flex items-end justify-between border-t pt-2"><span class="font-semibold">Estimated total</span><span id="qTot" class="head text-3xl font-bold text-teal"></span></div>
+        </div>
+      </div>
+      <button id="toBid" class="btn w-full" disabled data-i="bid">Find drivers & bid</button>
+    </div>
+
+    <div id="pn2" class="hidden space-y-3 p-4">
+      <h2 class="text-3xl font-bold">Name your price</h2>
+      <div class="grid grid-cols-2 gap-2 text-center">
+        <div class="rounded-lg bg-white p-3"><p class="text-xs text-slate-500">Calculated fare</p><p id="bBase" class="head text-2xl font-bold"></p></div>
+        <div class="rounded-lg bg-white p-3"><p class="text-xs text-slate-500">Minimum bid</p><p id="bMin" class="head text-2xl font-bold"></p></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="dec" class="btn2 !px-4 text-xl" aria-label="Decrease offer">−</button>
+        <div class="flex-1 rounded-lg border-2 border-amber bg-white py-2 text-center"><span id="bOffer" class="head text-4xl font-bold"></span><p class="text-xs text-slate-500" id="bStep"></p></div>
+        <button id="inc" class="btn2 !px-4 text-xl" aria-label="Increase offer">+</button>
+      </div>
+      <button id="sendOffer" class="btn w-full">Send offer</button>
+      <div class="relative mx-auto my-1 grid h-28 w-28 place-items-center"><i class="pulse"></i><i class="pulse" style="animation-delay:.8s"></i><i class="pulse" style="animation-delay:1.6s"></i><span class="head text-lg font-bold text-teal" id="radarTxt">Radar</span></div>
+      <ul id="bids" class="space-y-2"></ul>
+    </div>
+
+    <div id="pn3" class="hidden space-y-3 p-4">
+      <div class="rounded-lg bg-ink p-4 text-fog"><p id="nDist" class="head text-4xl font-bold text-amber"></p><p id="nTxt" class="text-lg"></p></div>
+      <div class="h-3 overflow-hidden rounded-full bg-slate-300"><div id="nBar" class="h-full bg-teal" style="width:0"></div></div>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-lg bg-white p-2"><p class="text-xs text-slate-500">Progress</p><b id="nPct" class="head text-2xl"></b></div>
+        <div class="rounded-lg bg-white p-2"><p class="text-xs text-slate-500">Remaining</p><b id="nRem" class="head text-2xl"></b></div>
+        <div class="rounded-lg bg-white p-2"><p class="text-xs text-slate-500">Speed</p><b id="nSpd" class="head text-2xl"></b></div>
+      </div>
+      <p id="nStat" class="text-sm font-semibold text-road"></p>
+      <button class="btn2 w-full" onclick="location.reload()">New dispatch</button>
+    </div>
+  </aside>
+</section>
+<div id="toast" class="fixed left-1/2 top-4 z-[60] hidden -translate-x-1/2 rounded-md bg-ink px-4 py-2 text-fog shadow-lg"></div>
+
+<script>
+const $=s=>document.querySelector(s), S={role:null,otp:null,verified:false,A:null,B:null,km:0,sec:0,coords:[],steps:[]};
+const T=(m,ms=4000)=>{const t=$('#toast');t.textContent=m;t.classList.remove('hidden');clearTimeout(T.h);T.h=setTimeout(()=>t.classList.add('hidden'),ms)};
+
+/* ---------- Countries (195+) ---------- */
+const CL=`AF Afghanistan|AL Albania|DZ Algeria|AD Andorra|AO Angola|AG Antigua and Barbuda|AR Argentina|AM Armenia|AU Australia|AT Austria|AZ Azerbaijan|BS Bahamas|BH Bahrain|BD Bangladesh|BB Barbados|BY Belarus|BE Belgium|BZ Belize|BJ Benin|BT Bhutan|BO Bolivia|BA Bosnia and Herzegovina|BW Botswana|BR Brazil|BN Brunei|BG Bulgaria|BF Burkina Faso|BI Burundi|CV Cabo Verde|KH Cambodia|CM Cameroon|CA Canada|CF Central African Republic|TD Chad|CL Chile|CN China|CO Colombia|KM Comoros|CG Congo|CD DR Congo|CR Costa Rica|CI Côte d'Ivoire|HR Croatia|CU Cuba|CY Cyprus|CZ Czechia|DK Denmark|DJ Djibouti|DM Dominica|DO Dominican Republic|EC Ecuador|EG Egypt|SV El Salvador|GQ Equatorial Guinea|ER Eritrea|EE Estonia|SZ Eswatini|ET Ethiopia|FJ Fiji|FI Finland|FR France|GA Gabon|GM Gambia|GE Georgia|DE Germany|GH Ghana|GR Greece|GD Grenada|GT Guatemala|GN Guinea|GW Guinea-Bissau|GY Guyana|HT Haiti|HN Honduras|HU Hungary|IS Iceland|IN India|ID Indonesia|IR Iran|IQ Iraq|IE Ireland|IL Israel|IT Italy|JM Jamaica|JP Japan|JO Jordan|KZ Kazakhstan|KE Kenya|KI Kiribati|XK Kosovo|KW Kuwait|KG Kyrgyzstan|LA Laos|LV Latvia|LB Lebanon|LS Lesotho|LR Liberia|LY Libya|LI Liechtenstein|LT Lithuania|LU Luxembourg|MG Madagascar|MW Malawi|MY Malaysia|MV Maldives|ML Mali|MT Malta|MH Marshall Islands|MR Mauritania|MU Mauritius|MX Mexico|FM Micronesia|MD Moldova|MC Monaco|MN Mongolia|ME Montenegro|MA Morocco|MZ Mozambique|MM Myanmar|NA Namibia|NR Nauru|NP Nepal|NL Netherlands|NZ New Zealand|NI Nicaragua|NE Niger|NG Nigeria|KP North Korea|MK North Macedonia|NO Norway|OM Oman|PK Pakistan|PW Palau|PS Palestine|PA Panama|PG Papua New Guinea|PY Paraguay|PE Peru|PH Philippines|PL Poland|PT Portugal|QA Qatar|RO Romania|RU Russia|RW Rwanda|KN Saint Kitts and Nevis|LC Saint Lucia|VC Saint Vincent and the Grenadines|WS Samoa|SM San Marino|ST São Tomé and Príncipe|SA Saudi Arabia|SN Senegal|RS Serbia|SC Seychelles|SL Sierra Leone|SG Singapore|SK Slovakia|SI Slovenia|SB Solomon Islands|SO Somalia|ZA South Africa|KR South Korea|SS South Sudan|ES Spain|LK Sri Lanka|SD Sudan|SR Suriname|SE Sweden|CH Switzerland|SY Syria|TW Taiwan|TJ Tajikistan|TZ Tanzania|TH Thailand|TL Timor-Leste|TG Togo|TO Tonga|TT Trinidad and Tobago|TN Tunisia|TR Turkey|TM Turkmenistan|TV Tuvalu|UG Uganda|UA Ukraine|AE United Arab Emirates|GB United Kingdom|US United States|UY Uruguay|UZ Uzbekistan|VU Vanuatu|VA Vatican City|VE Venezuela|VN Vietnam|YE Yemen|ZM Zambia|ZW Zimbabwe`
+ .split('|').map(s=>({iso:s.slice(0,2),name:s.slice(3)}));
+// Known bounding boxes [w,s,e,n]; all others are resolved via the map service geocoding on selection
+const BB={PK:[60.87,23.63,77.84,37.08],IT:[6.63,35.49,18.52,47.09],SA:[34.6,16.4,55.67,32.16],TR:[25.66,35.82,44.82,42.11],DE:[5.87,47.27,15.04,55.06],GB:[-8.65,49.86,1.77,60.86],US:[-125,24.4,-66.9,49.4],AE:[51.5,22.6,56.4,26.1],FR:[-5.2,41.3,9.6,51.1],ES:[-9.4,35.9,3.4,43.8],IN:[68.1,6.7,97.4,35.7],QA:[50.7,24.4,51.7,26.2],KW:[46.5,28.5,48.5,30.1],OM:[52,16.6,59.9,26.4],EG:[24.7,22,36.9,31.7],NL:[3.3,50.7,7.3,53.6]};
+const flag=i=>String.fromCodePoint(...[...i].map(c=>127397+c.charCodeAt()));
+$('#country').innerHTML=CL.map(c=>`<option value="${c.iso}">${flag(c.iso)} ${c.name} (${c.iso})</option>`).join('');
+$('#country').value='PK';
+
+/* ---------- Rates: [currency, base/km, fuel/km, toll/100km, tax] ---------- */
+const RATE={PK:['PKR',160,95,450,.17],IT:['EUR',1.3,.4,9,.22],DE:['EUR',1.4,.42,8,.19],SA:['SAR',3.2,1.1,0,.15],TR:['TRY',18,12,60,.2],GB:['GBP',1.1,.38,5,.2],US:['USD',1.5,.45,4,0],AE:['AED',3.5,1.2,2,.05],DEF:['USD',1.2,.35,3,.1]};
+'AT BE CY EE FI FR GR IE LV LT LU MT NL PT SK SI HR ES'.split(' ').forEach(c=>RATE[c]=RATE.IT);
+const VEH={heavy:{m:1.9,f:2.2,cap:26000},medium:{m:1.3,f:1.4,cap:8000},van:{m:1,f:1,cap:1200}};
+const rate=()=>RATE[S.iso]||RATE.DEF, fmt=n=>new Intl.NumberFormat(undefined,{style:'currency',currency:rate()[0],maximumFractionDigits:rate()[1]<10?2:0}).format(n);
+
+/* ---------- i18n (headline strings) ---------- */
+const I={en:{h1:'Verify once. Dispatch anywhere.',next:'Verify and continue',route:'Plan your route',bid:'Find drivers & bid'},
+ ur:{h1:'ایک بار تصدیق، ہر جگہ ترسیل',next:'تصدیق کریں اور آگے بڑھیں',route:'اپنا راستہ منتخب کریں',bid:'ڈرائیور تلاش کریں'},
+ it:{h1:'Verifica una volta. Spedisci ovunque.',next:'Verifica e continua',route:'Pianifica il percorso',bid:'Trova autisti e offri'},
+ ar:{h1:'تحقق مرة واحدة. اشحن في أي مكان.',next:'تحقق وتابع',route:'خطط مسارك',bid:'ابحث عن سائقين'},
+ tr:{h1:'Bir kez doğrula. Her yere gönder.',next:'Doğrula ve devam et',route:'Rotanı planla',bid:'Sürücü bul ve teklif ver'},
+ de:{h1:'Einmal verifizieren. Überall disponieren.',next:'Prüfen und weiter',route:'Route planen',bid:'Fahrer finden & bieten'}};
+function applyLang(){const l=$('#lang').value;document.documentElement.lang=l;document.documentElement.dir=['ur','ar'].includes(l)?'rtl':'ltr';
+ document.querySelectorAll('[data-i]').forEach(e=>e.textContent=I[l][e.dataset.i])}
+$('#lang').onchange=applyLang;
+
+/* ---------- Phase 1: onboarding ---------- */
+document.querySelectorAll('.role').forEach(b=>b.onclick=()=>{S.role=b.dataset.role;
+ document.querySelectorAll('.role').forEach(x=>x.classList.toggle('border-amber',x===b));
+ document.querySelectorAll('.role').forEach(x=>x.classList.toggle('border-transparent',x!==b));
+ document.querySelectorAll('.role').forEach(x=>x.classList.toggle('bg-white',true));
+ $('#drv').classList.toggle('hidden',S.role!=='driver')});
+document.querySelectorAll('.role').forEach(x=>x.classList.add('border-transparent'));
+$('#sendOtp').onclick=()=>{if($('#phone').value.replace(/\D/g,'').length<7)return T('Enter a valid mobile number first.');
+ S.otp=String(1000+Math.floor(Math.random()*9000));$('#otpRow').classList.remove('hidden');T('Demo code (no SMS is sent): '+S.otp,9000)};
+$('#verOtp').onclick=()=>{if($('#otp').value===S.otp){S.verified=true;$('#otpOk').classList.remove('hidden');$('#otpRow').classList.add('hidden')}else T('That code is incorrect. Check the code and try again.')};
+$('#go1').onclick=async()=>{
+ const need=[[S.role,'Choose a role.'],[$('#name').value.trim(),'Enter your full name.'],[$('#idn').value.trim(),'Enter your ID or license number.'],[S.verified,'Verify your phone number.']];
+ if(S.role==='driver')need.push([$('#reg').value.trim(),'Enter your vehicle registration.'],[+$('#vcap').value>0,'Enter your vehicle capacity.']);
+ const bad=need.find(n=>!n[0]);if(bad)return T(bad[1]);
+  S.iso=$('#country').value;S.lang=$('#lang').value;
+ if(S.role==='driver'){$('#veh').value=$('#vtype').value}
+ $('#drive').classList.remove('hidden');
+ const t0=Date.now();await initMap();
+ setTimeout(()=>{$('#p1').classList.add('hidden');$('#app').classList.remove('hidden');map.resize();map.fitBounds(S.bb,{duration:0});$('#drive').classList.add('hidden')},Math.max(0,2700-(Date.now()-t0)));
+};
+applyLang();
+
+/* ---------- Phase 2/3: map, geocoders, quote ---------- */
+let map,mA,mB;
+async function initMap(){
+ const c=CL.find(x=>x.iso===S.iso);$('#ctry').textContent=flag(c.iso)+' '+c.name;
+ let bb=BB[S.iso];
+ if(!bb){try{const r=await(await fetch(`https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(c.name)}&format=json&limit=1`)).json();const q=r[0].boundingbox.map(Number);bb=[q[2],q[0],q[3],q[1]]}
+  catch(e){T('Could not load the country boundary. Showing the whole world.');bb=[-180,-60,180,75]}}
+ S.bb=bb;const ctr=S.ctr=[(bb[0]+bb[2])/2,(bb[1]+bb[3])/2],px=(bb[2]-bb[0])*.08,py=(bb[3]-bb[1])*.08;
+ map=new maplibregl.Map({container:'map',center:ctr,zoom:5,maxBounds:[[bb[0]-px,bb[1]-py],[bb[2]+px,bb[3]+py]],
+  style:{version:8,sources:{osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,maxzoom:19,attribution:'© OpenStreetMap contributors'}},layers:[{id:'osm',type:'raster',source:'osm'}]}});
+ map.addControl(new maplibregl.NavigationControl(),'top-right');
+ map.on('load',()=>{
+  map.addSource('route',{type:'geojson',data:line([])});map.addSource('done',{type:'geojson',data:line([])});
+  map.addLayer({id:'rc',source:'route',type:'line',layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'
