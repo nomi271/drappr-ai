@@ -82,3 +82,9 @@ function arrival(){
   <p class="text-xs text-slate-500">Prototype with sample loads. Part-load price = 1.4x the load's share of a full truck, capped at 55% of a dedicated truck.</p>`;
   card.querySelectorAll('input').forEach(c=>c.onchange=()=>{L[c.dataset.i].on=c.checked;draw()})}
  draw()}
+/* Navigation camera + turn arrow */
+const camPad=()=>innerWidth>1024?{top:0,right:0,bottom:0,left:430}:{top:0,left:0,right:0,bottom:$('#sheet').offsetHeight};
+setInterval(()=>{const t=$('#nTxt');if(!t||$('#pn3').classList.contains('hidden'))return;const x=t.textContent.toLowerCase();
+ const a=/u-?turn/.test(x)?'↩':/roundabout/.test(x)?'⟳':/left/.test(x)?'⬅':/right/.test(x)?'➡':/arrive/.test(x)?'⚑':'⬆';
+ let e=$('#nArrow');if(!e){e=document.createElement('span');e.id='nArrow';e.className='mr-3 inline-block text-5xl text-fog';$('#nDist').before(e);$('#nDist').classList.add('inline-block')}
+ e.textContent=a},400);
