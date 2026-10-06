@@ -1,6 +1,5 @@
 /* Drappr AI v2 add-on: dial codes, languages, satellite, verified bids, escrow, return-load pool */
 const DIAL=Object.fromEntries('AF93 AL355 DZ213 AD376 AO244 AG1268 AR54 AM374 AU61 AT43 AZ994 BS1242 BH973 BD880 BB1246 BY375 BE32 BZ501 BJ229 BT975 BO591 BA387 BW267 BR55 BN673 BG359 BF226 BI257 CV238 KH855 CM237 CA1 CF236 TD235 CL56 CN86 CO57 KM269 CG242 CD243 CR506 CI225 HR385 CU53 CY357 CZ420 DK45 DJ253 DM1767 DO1809 EC593 EG20 SV503 GQ240 ER291 EE372 SZ268 ET251 FJ679 FI358 FR33 GA241 GM220 GE995 DE49 GH233 GR30 GD1473 GT502 GN224 GW245 GY592 HT509 HN504 HU36 IS354 IN91 ID62 IR98 IQ964 IE353 IL972 IT39 JM1876 JP81 JO962 KZ7 KE254 KI686 XK383 KW965 KG996 LA856 LV371 LB961 LS266 LR231 LY218 LI423 LT370 LU352 MG261 MW265 MY60 MV960 ML223 MT356 MH692 MR222 MU230 MX52 FM691 MD373 MC377 MN976 ME382 MA212 MZ258 MM95 NA264 NR674 NP977 NL31 NZ64 NI505 NE227 NG234 KP850 MK389 NO47 OM968 PK92 PW680 PS970 PA507 PG675 PY595 PE51 PH63 PL48 PT351 QA974 RO40 RU7 RW250 KN1869 LC1758 VC1784 WS685 SM378 ST239 SA966 SN221 RS381 SC248 SL232 SG65 SK421 SI386 SB677 SO252 ZA27 KR82 SS211 ES34 LK94 SD249 SR597 SE46 CH41 SY963 TW886 TJ992 TZ255 TH66 TL670 TG228 TO676 TT1868 TN216 TR90 TM993 TV688 UG256 UA380 AE971 GB44 US1 UY598 UZ998 VU678 VA379 VE58 VN84 YE967 ZM260 ZW263'.split(' ').map(s=>[s.slice(0,2),'+'+s.slice(2)]));
-const DL=Object.fromEntries(Object.entries({ur:'PK',it:'IT SM VA',ar:'SA AE EG DZ MA TN JO KW QA OM BH IQ LY SD YE LB SY',tr:'TR',de:'DE AT CH LI',fr:'FR BE CI SN CM MC CD',es:'ES MX AR CO CL PE VE EC UY PY BO',pt:'PT BR AO MZ',fa:'IR',hi:'IN',zh:'CN TW',ru:'RU BY KZ'}).flatMap(([l,cs])=>cs.split(' ').map(c=>[c,l])));
 Object.assign(I,{
  fr:{h1:'Vérifiez une fois. Expédiez partout.',next:'Vérifier et continuer',route:'Planifiez votre trajet',bid:'Trouver des chauffeurs'},
  es:{h1:'Verifica una vez. Envía a cualquier lugar.',next:'Verificar y continuar',route:'Planifica tu ruta',bid:'Buscar conductores'},
@@ -10,20 +9,21 @@ Object.assign(I,{
  zh:{h1:'一次验证，全球发运。',next:'验证并继续',route:'规划路线',bid:'寻找司机'},
  ru:{h1:'Один раз подтвердите. Отправляйте куда угодно.',next:'Подтвердить и продолжить',route:'Спланируйте маршрут',bid:'Найти водителей'}});
 $('#lang').insertAdjacentHTML('beforeend','<option value="fr">Français</option><option value="es">Español</option><option value="pt">Português</option><option value="fa">فارسی</option><option value="hi">हिन्दी</option><option value="zh">中文</option><option value="ru">Русский</option>');
-applyLang=function(){const l=$('#lang').value;document.documentElement.lang=l;document.documentElement.dir=['ur','ar','fa'].includes(l)?'rtl':'ltr';document.querySelectorAll('[data-i]').forEach(e=>e.textContent=I[l][e.dataset.i])};
+applyLang=function(){const l=$('#lang').value,rtl=['ur','ar','fa'].includes(l);document.documentElement.lang=l;document.documentElement.dir='ltr';document.querySelectorAll('[data-i]').forEach(e=>{e.textContent=I[l][e.dataset.i];e.dir=rtl?'rtl':'ltr'})};
 $('#lang').onchange=applyLang;
 const dial=document.createElement('span');dial.className='grid place-items-center rounded-md border border-slate-300 bg-white px-3 font-semibold text-road';$('#phone').before(dial);
-function onCountry(){const c=$('#country').value;dial.textContent=DIAL[c]||'+';$('#phone').placeholder='Mobile number';if(DL[c]){$('#lang').value=DL[c];applyLang()}}
-$('#country').onchange=onCountry;onCountry();
+function onCountry(){const c=$('#country').value;dial.textContent=DIAL[c]||'+';$('#phone').placeholder='Mobile number'}
+$('#country').onchange=onCountry;onCountry();applyLang();
 
 /* Satellite toggle */
 const _im=initMap;
 initMap=async function(){await _im();
  map.on('load',()=>{map.addSource('sat',{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,maxzoom:19,attribution:'Imagery © Esri'});
   map.addLayer({id:'sat',type:'raster',source:'sat',layout:{visibility:'none'}},'rc')});
- const b=document.createElement('button');b.className='btn2 absolute right-3 top-28 z-10 bg-white';b.textContent='Satellite';
- b.onclick=()=>{const on=map.getLayoutProperty('sat','visibility')!=='visible';map.setLayoutProperty('sat','visibility',on?'visible':'none');b.textContent=on?'Map':'Satellite'};
- $('#app').appendChild(b)};
+ const box=document.createElement('div');box.className='maplibregl-ctrl maplibregl-ctrl-group';
+ const b=document.createElement('button');b.type='button';b.title='Satellite';b.textContent='🛰';b.style.fontSize='18px';
+ b.onclick=()=>{const on=map.getLayoutProperty('sat','visibility')!=='visible';map.setLayoutProperty('sat','visibility',on?'visible':'none');b.style.background=on?'#F5A524':''};
+ box.appendChild(b);map.addControl({onAdd:()=>box,onRemove:()=>box.remove()},'top-right')};
 
 /* Verified bids */
 radar=function(){clearInterval(S.rt);$('#bids').innerHTML='';let n=0;$('#radarTxt').textContent='Scanning';
@@ -60,8 +60,8 @@ function arrival(){
  const pod=document.createElement('div');pod.className='space-y-2 rounded-lg bg-white p-4';
  pod.innerHTML=`<b class="head text-xl">Proof of delivery</b><p class="text-sm text-slate-600">Confirm the goods arrived to release the escrow.</p>
   <button id="relBtn" class="btn w-full !text-lg">Confirm delivery and release ${fmt(S.price*.94)}</button><div id="stars" class="hidden text-2xl text-amber"></div>`;
- const L=[[.05,.02,.45],[.1,.15,.7],[.18,.3,.95]].map(([f,p,d],i)=>{const w=Math.max(10,Math.round(cap*f/10)*10),dk=S.km*(d-p),solo=soloPrice(w,dk);
-  return{w,dk,solo,pool:solo*.55,pu:rev[Math.floor(p*n)],dr:rev[Math.floor(d*n)],on:true,i}});
+ const L=[[.1,.02,.45],[.16,.15,.7],[.22,.3,.95]].map(([f,p,d],i)=>{const w=Math.max(10,Math.round(cap*f*(.7+Math.random()*.6)/10)*10),dk=S.km*(d-p),solo=soloPrice(w,dk),share=w/cap*S.q.total*(dk/S.km)*1.4;
+  return{w,dk,solo,pool:Math.min(solo*.55,share),pu:rev[Math.floor(p*n)],dr:rev[Math.floor(d*n)],on:true,i}});
  const card=document.createElement('div');card.className='space-y-2 rounded-lg border-2 border-amber bg-white p-4';
  go.insertBefore(pod,btn);go.insertBefore(card,btn);
  $('#relBtn').onclick=()=>{$('#relBtn').disabled=true;$('#relBtn').textContent='Payment released ✔';const s=$('#stars');s.classList.remove('hidden');
@@ -79,6 +79,6 @@ function arrival(){
   <div class="flex justify-between"><span>Carrier earns after 8% fee</span><b class="text-teal">${fmt(net)}</b></div>
   <div class="flex justify-between"><span>Fuel and tolls of the return leg</span><b>${fmt(run)}</b></div>
   <div class="flex justify-between"><span>Shippers save vs a dedicated truck</span><b>${fmt(save)}</b></div></div>
-  <p class="text-xs text-slate-500">Prototype with sample loads. Prices use the same rate tables as the quote.</p>`;
+  <p class="text-xs text-slate-500">Prototype with sample loads. Part-load price = 1.4x the load's share of a full truck, capped at 55% of a dedicated truck.</p>`;
   card.querySelectorAll('input').forEach(c=>c.onchange=()=>{L[c.dataset.i].on=c.checked;draw()})}
  draw()}
