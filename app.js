@@ -120,7 +120,7 @@ function startNav(price){
   let lo=0,hi=cum.length-1;while(lo<hi-1){const m=(lo+hi)>>1;cum[m]<=d?lo=m:hi=m}
   const sl=(cum[hi]-cum[lo])||1,fr=(d-cum[lo])/sl,pos=[co[lo][0]+(co[hi][0]-co[lo][0])*fr,co[lo][1]+(co[hi][1]-co[lo][1])*fr];
   tm.setLngLat(pos);el.style.transform=`scaleX(${bearing(co[lo],co[hi])>180?-1:1})`;
-  S.hd=S.hd==null?bearing(co[lo],co[hi]):S.hd+((((bearing(co[lo],co[hi])-S.hd+540)%360)-180)*.08);map.jumpTo({center:pos,bearing:S.hd,pitch:60});
+  S.hd=S.hd==null?bearing(co[lo],co[hi]):S.hd+((((bearing(co[lo],co[hi])-S.hd+540)%360)-180)*.08);map.jumpTo({center:pos,bearing:S.hd,pitch:60,zoom:16,padding:camPad()});
   if(f++%5===0)map.getSource('done').setData(line(co.slice(0,lo+1).concat([pos])));
   let k=0;sIdx.forEach((ix,i)=>{if(ix<=lo)k=i});const nx=Math.min(k+1,S.steps.length-1),dn=Math.max(0,cum[sIdx[nx]]-d);
   $('#nTxt').textContent=(p>=1?'You have arrived':S.steps[Math.min(nx,S.steps.length-1)].t);
