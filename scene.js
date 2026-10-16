@@ -54,3 +54,10 @@ arrival=function(){_ar();
  const h=Math.floor(S.sec/3600),m=Math.round(S.sec%3600/60),avg=S.km/(S.sec/3600),c=document.createElement('div');c.className='rounded-lg bg-white p-4';
  c.innerHTML=`<b class="head text-xl">Trip summary</b><div class="mt-2 grid grid-cols-3 gap-2 text-center"><div><p class="text-xs text-slate-500">Distance</p><b class="head text-2xl">${S.km.toFixed(1)} km</b></div><div><p class="text-xs text-slate-500">Drive time</p><b class="head text-2xl">${h?h+'h ':''}${m}m</b></div><div><p class="text-xs text-slate-500">Avg speed</p><b class="head text-2xl">${avg.toFixed(0)} km/h</b></div></div>`;
  $('#nStat').after(c)};
+
+/* Safety: camera helper, both location boxes always present, country view fitted above the panel */
+if(typeof camPad==='undefined')globalThis.camPad=()=>innerWidth>1024?{top:0,right:0,bottom:0,left:430}:{top:0,left:0,right:0,bottom:$('#sheet').offsetHeight};
+const _im3=initMap;
+initMap=async function(){await _im3();
+ [['#gA','A'],['#gB','B']].forEach(([s,k])=>{if(!$(s).querySelector('input'))mkSearch(s,k)});
+ const fb=map.fitBounds.bind(map);map.fitBounds=(b,o={})=>fb(b,o.padding?o:{...o,padding:camPad()})};
